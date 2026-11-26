@@ -244,6 +244,20 @@ bool flash_stress_running(const flash_stress_t * pstress)
 }
 
 /**
+ * Returns whether the test is waiting for an erase or a program, a poll would do nothing now.
+ * The flash is asked through the busy function, so call it where flash_stress_poll() is called.
+ * @param pstress Pointer to the test instance.
+ * @return true while the flash is busy with a started operation; otherwise false.
+ */
+bool flash_stress_waiting(const flash_stress_t * pstress)
+{
+    if (!flash_stress_running(pstress)) return false;
+    if (!pstress->wait) return false;
+    if (!pstress->ops.busy) return false;
+    return pstress->ops.busy();
+}
+
+/**
  * Returns the current state of the test.
  * @param pstress Pointer to the test instance.
  * @return Current state, or FLASH_STRESS_ST_IDLE when the instance is invalid.

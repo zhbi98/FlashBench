@@ -35,8 +35,8 @@
 /*Failed ENDURANCE cycles ending the test*/
 #define STRESS_APP_END_MAX_ERRS 10U
 
-/*Steps done by one call of stress_app_process(), more steps run the test faster*/
-#define STRESS_APP_STEPS 16U
+/*Longest time one call of stress_app_process() works without a break, in ticks of the port*/
+#define STRESS_APP_SLICE 5U
 
 /**********************
  *      TYPEDEFS
@@ -93,17 +93,23 @@ bool stress_app_begin(flash_stress_mode_t mode)
 }
 
 /**
- * Advances the test by a few steps, to be called continuously from the main loop or one
- * task, never from an interrupt. A step returns at once while the flash is busy, so the
- * loop keeps running during an erase. The end of a test is reported once through
- * stress_app_on_end() of the mode sample.
+ * Advances the test, to be called continuously from the main loop or one task, never from
+ * an interrupt. It works until the flash has to be waited for or the time slice is used
+ * up, so the loop keeps running during an erase. The end of a test is reported once
+ * through stress_app_on_end() of the mode sample.
  */
 void stress_app_process(void)
 {
     flash_stress_t * pstress = &stress_app_inst;
+    uint32_t t0 = stress_app_tick();
 
-    for (uint32_t i = 0; i < STRESS_APP_STEPS; i++)
-        if (!flash_stress_poll(pstress)) break;
+    while (flash_stress_poll(pstress)) {
+        /*Nothing can be done until the erase or the program has finished*/
+        if (flash_stress_waiting(pstress)) break;
+
+        /*The other work of the caller gets its turn*/
+        if ((stress_app_tick() - t0) >= STRESS_APP_SLICE) break;
+    }
 
     if (!stress_app_active) return;
     if (flash_stress_running(pstress)) return;

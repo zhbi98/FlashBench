@@ -1,6 +1,6 @@
 # 平台移植与 Flash 驱动对接
 
-本篇使用 [device_sample.c](../samples/device_sample.c) 作为接入骨架：完成本篇后，测试能够启动，轮询持续运行，结束时串口打印结果。
+理解[工作原理](architecture.md)后，下一步是把框架接到实际的 Flash 驱动。本篇使用 [device_sample.c](../samples/device_sample.c) 作为接入骨架：完成本篇后，测试能够启动，轮询持续运行，结束时串口打印结果。
 
 切换模式和显示测试数据在[下一篇](usage.md)说明，避免把驱动对接和业务显示混在一起。
 
@@ -107,7 +107,7 @@ bool stress_app_busy(void)
 | `STRESS_APP_END_BASE` / `STRESS_APP_END_SEC_CNT` | 0x5FE000 / 2 | ENDURANCE 专用区，会被故意擦坏 |
 | `STRESS_APP_ROTATE_READS` / `STRESS_APP_READ_READS` / `STRESS_APP_END_READS` | 4 / 32 / 1 | 各模式每轮读回比较或随机读的次数 |
 | `STRESS_APP_END_MAX_ERRS` | 10 | ENDURANCE 失败多少次后结束 |
-| `STRESS_APP_STEPS` | 16 | 每次 `stress_app_process()` 推进的步数 |
+| `STRESS_APP_SLICE` | 5 | 每次 `stress_app_process()` 最多连续工作的时间，单位同 `stress_app_tick()`（例程为毫秒） |
 
 测试区地址必须按扇区对齐，并确认确实空闲。框架启动时逐扇区检查，发现别的数据就中止并报 `AREA USED`，不擦除任何内容。ENDURANCE 区不能与其他用途重叠，至少两个扇区，断电时另一个扇区还能保留擦写次数。
 
@@ -132,9 +132,24 @@ void app_stress_run(void)
 }
 ```
 
-已有主循环时，只需在循环前启动，把 `stress_app_process()` 放进原循环。每一步在 Flash 忙时立即返回，擦除期间主循环照常运行；调用越频繁，测试跑得越快。
+已有主循环时，只需在循环前启动，把 `stress_app_process()` 放进原循环。所有调用放在同一个执行上下文，不能放进中断。`stress_app_running()` 为 `true` 期间，应用其他代码不能访问 Flash，保存参数、读写文件等操作需要等待或跳过。测试结束时 `stress_app_process()` 调用一次 `stress_app_on_end()`，打印结束报告。
 
-所有调用放在同一个执行上下文，不能放进中断。`stress_app_running()` 为 `true` 期间，应用其他代码不能访问 Flash，保存参数、读写文件等操作需要等待或跳过。测试结束时 `stress_app_process()` 调用一次 `stress_app_on_end()`，打印结束报告。
+### 每次调用做多少事
+
+`stress_app_process()` 不按固定步数推进，每次调用一直工作到下面任一条件成立才返回：
+
+| 退出条件 | 判断方式 | 作用 |
+| --- | --- | --- |
+| 需要等待 Flash | `flash_stress_waiting()` 返回 `true` | 擦除或写入进行中，继续轮询不会前进，把时间让给主循环 |
+| 时间片用完 | `stress_app_tick()` 的差值达到 `STRESS_APP_SLICE` | 读回比较不需要等待，用时间片限制连续占用的时间 |
+| 测试结束 | `flash_stress_poll()` 返回 `false` | 结束、中止或没有启动 |
+
+对接时注意：
+
+- **调用间隔决定测试速度。** 每次擦除和每页写入都至少等到下一次调用。调用越频繁，测试跑得越快；间隔几百毫秒调用一次时，一个 4KB 扇区的 16 次页编程就要多等几秒。建议在主循环中连续调用，或间隔不超过几毫秒。
+- **计时函数必须真实递增。** `stress_app_tick()` 返回常数时，读回比较阶段不会因超时退出，只有遇到擦除或编程才返回，主循环会被长时间占用。阻塞式驱动没有等待状态，完全依靠时间片退出。
+- **`STRESS_APP_SLICE` 的取值。** 取应用能接受的最长连续占用时间。单次读一个扇区并比较的耗时超过它时，每次调用至少仍会做完这一步。
+- **`flash_stress_waiting()` 会访问 Flash。** 它内部调用 `stress_app_busy()`，只能在调用 `stress_app_process()` 的上下文中使用。
 
 ## FreeRTOS 任务对接
 
@@ -161,7 +176,7 @@ void app_menu_read(void)
 }
 ```
 
-`FreeRTOSConfig.h` 中需要 `INCLUDE_vTaskDelay = 1`。测试任务每 2 ms 轮询一次，周期换算为 0 tick 时按 1 tick 处理。访问同一片 Flash 的其他任务必须与测试任务互斥。`stress_app_show()` 只读数据，可以在 GUI 任务中调用；32 位 CPU 上 64 位字节数可能读到更新一半的值，只影响一次显示。
+`FreeRTOSConfig.h` 中需要 `INCLUDE_vTaskDelay = 1`。测试任务每 2 ms 轮询一次，周期换算为 0 tick 时按 1 tick 处理；系统 tick 周期较长时，实际轮询间隔是一个 tick，测试会相应变慢。访问同一片 Flash 的其他任务必须与测试任务互斥。`stress_app_show()` 只读数据，可以在 GUI 任务中调用；32 位 CPU 上 64 位字节数可能读到更新一半的值，只影响一次显示。
 
 ## 如何确认已经接通
 
@@ -169,5 +184,6 @@ void app_menu_read(void)
 - ROTATE 跑几轮后 `Fail` 仍为 0；停止后测试区读回全 `0xFF`。
 - 屏幕上的 `Erase avg` 与 Flash 手册的扇区擦除典型时间接近；为 0 说明没有接计时。
 - 启动后立即 `abort: AREA USED`：测试区里有别的数据，核对 `STRESS_APP_BASE` 和分区表。
+- 测试能跑但一轮明显偏慢：轮询的调用间隔过长，见[每次调用做多少事](#每次调用做多少事)。
 
 这时按[切换模式与读取测试数据](usage.md)切换模式并显示读数。
