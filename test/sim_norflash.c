@@ -49,6 +49,7 @@ static void sim_expect(bool cond, const char * fmt, ...);
 static void sim_test_rotate(void);
 static void sim_test_read(void);
 static void sim_test_endurance(void);
+static void sim_test_waiting(void);
 static void sim_test_config(void);
 
 /**********************
@@ -126,6 +127,7 @@ int main(void)
     sim_test_rotate();
     sim_test_read();
     sim_test_endurance();
+    sim_test_waiting();
     sim_test_config();
 
     if (sim_fails != 0U) {
@@ -547,6 +549,52 @@ static void sim_test_endurance(void)
     flash_stress_start(&sim_inst, 20U);
     sim_run();
     sim_expect(sim_ok == 20U, "blocking driver, single sector");
+}
+
+/**
+ * Tests flash_stress_waiting(), which tells the caller when a poll would do nothing.
+ */
+static void sim_test_waiting(void)
+{
+    uint32_t waits = 0U;
+    uint32_t polls = 0U;
+    bool waiting = false;
+
+    printf("WAITING\n");
+
+    /*Nothing is waited for without a running test*/
+    sim_reset(0xFFU);
+    sim_setup(&sim_ops_nb, FLASH_STRESS_MODE_ROTATE, 4U, 2U);
+    sim_expect(!flash_stress_waiting(NULL), "no instance");
+    sim_expect(!flash_stress_waiting(&sim_inst), "not started");
+
+    /*A started erase is waited for until the flash is no longer busy*/
+    flash_stress_start(&sim_inst, 2U);
+    while ((sim_n_erase == 0U) && flash_stress_poll(&sim_inst)) { }
+    sim_expect(flash_stress_waiting(&sim_inst), "erase in progress");
+
+    /*Polling only when nothing is waited for still runs the whole test*/
+    while (flash_stress_running(&sim_inst)) {
+        if (flash_stress_waiting(&sim_inst)) {
+            waits++;
+            continue;
+        }
+        flash_stress_poll(&sim_inst);
+        polls++;
+    }
+    sim_run();
+    sim_expect(sim_done && (sim_ok == 2U) && (sim_err == 0U), "test passes when waits are skipped");
+    sim_expect((waits > 0U) && (polls > 0U), "waits were skipped");
+    sim_expect(!flash_stress_waiting(&sim_inst), "finished");
+
+    /*A blocking driver has finished when its function returns*/
+    sim_reset(0xFFU);
+    sim_setup(&sim_ops_blk, FLASH_STRESS_MODE_ROTATE, 4U, 2U);
+    flash_stress_start(&sim_inst, 1U);
+    while ((sim_n_erase == 0U) && flash_stress_poll(&sim_inst)) { }
+    waiting = flash_stress_waiting(&sim_inst);
+    sim_run();
+    sim_expect(!waiting && (sim_ok == 1U), "blocking driver never waits");
 }
 
 /**

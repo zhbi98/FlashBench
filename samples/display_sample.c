@@ -1,5 +1,5 @@
 /**
- * @file show_sample.c
+ * @file display_sample.c
  *
  */
 
@@ -10,21 +10,21 @@
 #include <stdio.h>
 #include "flash_stress.h"
 
-/*Include the declarations of the stress_app_* functions of the application here*/
+/*Include the declarations of the stress_* functions of the application here*/
 
 /*********************
  *      DEFINES
  *********************/
 
 /*One tagged line on the debug UART, replace printf by the UART output of the application*/
-#define STRESS_APP_LOG(fmt, ...) printf("[FLASH STRESS] " fmt "\r\n", ##__VA_ARGS__)
+#define STRESS_LOG(fmt, ...) printf("[FLASH STRESS] " fmt "\r\n", ##__VA_ARGS__)
 
 /*Size of one line of text on the display, and of one byte count*/
-#define STRESS_APP_TEXT_LEN 40U
-#define STRESS_APP_SIZE_LEN 12U
+#define STRESS_TEXT_LEN 40U
+#define STRESS_SIZE_LEN 12U
 
 /*ENDURANCE cycles between two progress lines on the log*/
-#define STRESS_APP_LOG_EVERY 1000U
+#define STRESS_LOG_EVERY 1000U
 
 /**********************
  *      TYPEDEFS
@@ -34,10 +34,10 @@
  *  STATIC PROTOTYPES
  **********************/
 
-static void stress_app_size(char * text, uint32_t size, uint64_t bytes);
-static const char * stress_app_mode_name(flash_stress_mode_t mode);
-static const char * stress_app_state_name(flash_stress_state_t state);
-static const char * stress_app_err_name(flash_stress_res_t res);
+static void stress_size(char * text, uint32_t size, uint64_t bytes);
+static const char * stress_mode_name(flash_stress_mode_t mode);
+static const char * stress_state_name(flash_stress_state_t state);
+static const char * stress_err_name(flash_stress_res_t res);
 
 /*Display of the application, replace it by an LCD driver or a label of the GUI*/
 extern void board_display_line(uint32_t row, const char * text);
@@ -51,36 +51,36 @@ extern void board_display_line(uint32_t row, const char * text);
  **********************/
 
 /**
- * Logs every detected error, the framework calls it from stress_app_process().
+ * Logs every detected error, the framework calls it from stress_process().
  * @param err Pointer to the error, valid only during the call.
  */
-void stress_app_on_error(const flash_stress_err_t * err)
+void stress_on_error(const flash_stress_err_t * err)
 {
-    const char * name = stress_app_err_name(err->res);
+    const char * name = stress_err_name(err->res);
     unsigned long loop = err->loop;
     unsigned long addr = err->addr;
     unsigned long bits = err->bad_bits;
 
     /*Failed low level calls carry no compare details*/
     if (err->bad_cnt == 0U) {
-        STRESS_APP_LOG("loop %lu %s at 0x%06lX", loop, name, addr);
+        STRESS_LOG("loop %lu %s at 0x%06lX", loop, name, addr);
         return;
     }
 
-    STRESS_APP_LOG("loop %lu %s at 0x%06lX expect 0x%02X got 0x%02X bits %lu",
+    STRESS_LOG("loop %lu %s at 0x%06lX expect 0x%02X got 0x%02X bits %lu",
         loop, name, addr, err->expect, err->got, bits);
 }
 
 /**
- * Logs the counters after every loop, the framework calls it from stress_app_process().
+ * Logs the counters after every loop, the framework calls it from stress_process().
  * @param loop Index of the finished loop, starting from 0.
  * @param ok_cnt Number of passed loops.
  * @param err_cnt Number of failed loops.
  */
-void stress_app_on_loop(uint32_t loop, uint32_t ok_cnt, uint32_t err_cnt)
+void stress_on_loop(uint32_t loop, uint32_t ok_cnt, uint32_t err_cnt)
 {
-    bool endurance = stress_app_mode() == FLASH_STRESS_MODE_ENDURANCE;
-    bool due = ((loop + 1U) % STRESS_APP_LOG_EVERY) == 0U;
+    bool endurance = stress_mode() == FLASH_STRESS_MODE_ENDURANCE;
+    bool due = ((loop + 1U) % STRESS_LOG_EVERY) == 0U;
     unsigned long n = loop;
     unsigned long ok = ok_cnt;
     unsigned long bad = err_cnt;
@@ -88,23 +88,23 @@ void stress_app_on_loop(uint32_t loop, uint32_t ok_cnt, uint32_t err_cnt)
     /*ENDURANCE runs a loop per cycle, one line per cycle would flood the UART*/
     if (endurance && (!due)) return;
 
-    STRESS_APP_LOG("loop %lu: ok=%lu err=%lu", n, ok, bad);
+    STRESS_LOG("loop %lu: ok=%lu err=%lu", n, ok, bad);
 }
 
 /**
  * Reads the live data of the test and draws it as six text lines,
  * to be called periodically, for example every 500 ms.
  */
-void stress_app_show(void)
+void stress_show(void)
 {
-    flash_stress_t * pstress = stress_app_get_object();
+    flash_stress_t * pstress = stress_object();
     const flash_stress_stat_t * stat = flash_stress_stat(pstress);
     const flash_stress_err_t * err = flash_stress_last_err(pstress);
     const flash_stress_time_t * er = &stat->er_time;
-    bool endurance = stress_app_mode() == FLASH_STRESS_MODE_ENDURANCE;
-    const char * mode = stress_app_mode_name(stress_app_mode());
-    const char * state = stress_app_state_name(flash_stress_state(pstress));
-    const char * name = stress_app_err_name(err->res);
+    bool endurance = stress_mode() == FLASH_STRESS_MODE_ENDURANCE;
+    const char * mode = stress_mode_name(stress_mode());
+    const char * state = stress_state_name(flash_stress_state(pstress));
+    const char * name = stress_err_name(err->res);
     unsigned long loops = flash_stress_loop(pstress);
     unsigned long ok_cnt = flash_stress_ok_cnt(pstress);
     unsigned long err_cnt = flash_stress_err_cnt(pstress);
@@ -115,13 +115,13 @@ void stress_app_show(void)
     unsigned long addr = err->addr;
     unsigned int expect = err->expect;
     unsigned int got = err->got;
-    char rd[STRESS_APP_SIZE_LEN] = {0};
-    char wr[STRESS_APP_SIZE_LEN] = {0};
-    char text[STRESS_APP_TEXT_LEN] = {0};
+    char rd[STRESS_SIZE_LEN] = {0};
+    char wr[STRESS_SIZE_LEN] = {0};
+    char text[STRESS_TEXT_LEN] = {0};
 
     if (er->cnt != 0U) er_avg = (unsigned long)(er->sum / er->cnt);
-    stress_app_size(rd, sizeof(rd), stat->rd_bytes);
-    stress_app_size(wr, sizeof(wr), stat->wr_bytes);
+    stress_size(rd, sizeof(rd), stat->rd_bytes);
+    stress_size(wr, sizeof(wr), stat->wr_bytes);
 
     /*Mode and state, for example "READ  VERIFY"*/
     snprintf(text, sizeof(text), "%s  %s", mode, state);
@@ -157,30 +157,30 @@ void stress_app_show(void)
 /**
  * Logs the result of a test that has just ended, called by the mode sample.
  */
-void stress_app_report(void)
+void stress_report(void)
 {
-    flash_stress_t * pstress = stress_app_get_object();
+    flash_stress_t * pstress = stress_object();
     const flash_stress_stat_t * stat = flash_stress_stat(pstress);
     const flash_stress_err_t * err = flash_stress_last_err(pstress);
-    const char * mode = stress_app_mode_name(stress_app_mode());
+    const char * mode = stress_mode_name(stress_mode());
     unsigned long ok_cnt = flash_stress_ok_cnt(pstress);
     unsigned long err_cnt = flash_stress_err_cnt(pstress);
     unsigned long cycles = flash_stress_cycles(pstress);
     unsigned long first = stat->first_fail;
     unsigned long addr = err->addr;
-    char rd[STRESS_APP_SIZE_LEN] = {0};
+    char rd[STRESS_SIZE_LEN] = {0};
 
     /*The area holds foreign data or could not be read, nothing was erased*/
     if (flash_stress_state(pstress) == FLASH_STRESS_ST_ABORT) {
-        STRESS_APP_LOG("%s abort: %s at 0x%06lX", mode, stress_app_err_name(err->res), addr);
+        STRESS_LOG("%s abort: %s at 0x%06lX", mode, stress_err_name(err->res), addr);
         return;
     }
 
-    stress_app_size(rd, sizeof(rd), stat->rd_bytes);
-    STRESS_APP_LOG("%s end: ok=%lu err=%lu read=%s", mode, ok_cnt, err_cnt, rd);
+    stress_size(rd, sizeof(rd), stat->rd_bytes);
+    STRESS_LOG("%s end: ok=%lu err=%lu read=%s", mode, ok_cnt, err_cnt, rd);
 
-    if (stress_app_mode() == FLASH_STRESS_MODE_ENDURANCE)
-        STRESS_APP_LOG("cycles=%lu first fail=%lu", cycles, first);
+    if (stress_mode() == FLASH_STRESS_MODE_ENDURANCE)
+        STRESS_LOG("cycles=%lu first fail=%lu", cycles, first);
 }
 
 /**********************
@@ -193,7 +193,7 @@ void stress_app_report(void)
  * @param size Size of the destination text.
  * @param bytes Byte count to write.
  */
-static void stress_app_size(char * text, uint32_t size, uint64_t bytes)
+static void stress_size(char * text, uint32_t size, uint64_t bytes)
 {
     unsigned long kb = (unsigned long)(bytes >> 10);
 
@@ -208,7 +208,7 @@ static void stress_app_size(char * text, uint32_t size, uint64_t bytes)
  * @param mode Kind of test.
  * @return Pointer to a constant string.
  */
-static const char * stress_app_mode_name(flash_stress_mode_t mode)
+static const char * stress_mode_name(flash_stress_mode_t mode)
 {
     switch (mode) {
     case FLASH_STRESS_MODE_READ: return "READ";
@@ -222,7 +222,7 @@ static const char * stress_app_mode_name(flash_stress_mode_t mode)
  * @param state State of the test.
  * @return Pointer to a constant string.
  */
-static const char * stress_app_state_name(flash_stress_state_t state)
+static const char * stress_state_name(flash_stress_state_t state)
 {
     switch (state) {
     case FLASH_STRESS_ST_CHECK: return "CHECK";
@@ -243,7 +243,7 @@ static const char * stress_app_state_name(flash_stress_state_t state)
  * @param res Error type.
  * @return Pointer to a constant string.
  */
-static const char * stress_app_err_name(flash_stress_res_t res)
+static const char * stress_err_name(flash_stress_res_t res)
 {
     switch (res) {
     case FLASH_STRESS_ERR_NOT_BLANK: return "AREA USED";
