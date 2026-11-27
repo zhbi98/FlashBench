@@ -6,7 +6,6 @@
 /*********************
  *      INCLUDES
  *********************/
-
 #include "flash_stress.h"
 #include "FreeRTOS.h"
 #include "task.h"
@@ -17,7 +16,6 @@
 /*********************
  *      DEFINES
  *********************/
-
 /*Period of the test task, a step returns at once while the flash is busy*/
 #define STRESS_TASK_MS 2U
 
@@ -32,63 +30,66 @@
 /**********************
  *  STATIC PROTOTYPES
  **********************/
-
-static void stress_task(void * argument_p);
-static void stress_handle(uint8_t req);
+static void task_main(void * argument_p);
+static void handle_req(uint8_t req);
 
 /**********************
  *  STATIC VARIABLES
  **********************/
-
 /*Requests of the other tasks, only the test task calls the framework*/
-static QueueHandle_t stress_queue = NULL;
+static QueueHandle_t queue = NULL;
+
+/**********************
+ *      MACROS
+ **********************/
 
 /**********************
  *   GLOBAL FUNCTIONS
  **********************/
-
 /**
- * Creates the request queue and the test task, once after the flash driver is ready.
+ * Creates the request queue and the test task, once after the flash driver is
+ * ready.
  * The task needs INCLUDE_vTaskDelay = 1 in FreeRTOSConfig.h.
- * @param stack Stack depth of the task, in words of the port.
- * @param priority Priority of the task, below the tasks that must not be delayed.
- * @return true if the queue and the task were created; otherwise false.
+ * @param stack     Stack depth of the task, in words of the port.
+ * @param priority  Priority of the task, below the tasks that must not be
+ *                  delayed.
+ * @return          true if the queue and the task were created; otherwise
+ *                  false.
  */
 bool stress_task_create(configSTACK_DEPTH_TYPE stack, UBaseType_t priority)
 {
     BaseType_t res = pdFAIL;
 
-    stress_queue = xQueueCreate(STRESS_QUEUE_LEN, sizeof(uint8_t));
-    if (stress_queue == NULL) return false;
+    queue = xQueueCreate(STRESS_QUEUE_LEN, sizeof(uint8_t));
+    if (queue == NULL) return false;
 
-    res = xTaskCreate(stress_task, "stress", stack, NULL, priority, NULL);
+    res = xTaskCreate(task_main, "stress", stack, NULL, priority, NULL);
     return res == pdPASS;
 }
 
 /**
  * Sends a request from another task, for example from the menu of the GUI task.
- * @param req Mode to start, or STRESS_REQ_STOP to stop the test.
- * @return true if the request was queued; otherwise false.
+ * @param req  Mode to start, or STRESS_REQ_STOP to stop the test.
+ * @return     true if the request was queued; otherwise false.
  */
 bool stress_request(uint8_t req)
 {
     BaseType_t res = pdFAIL;
 
-    if (stress_queue == NULL) return false;
+    if (queue == NULL) return false;
 
-    res = xQueueSend(stress_queue, &req, 0);
+    res = xQueueSend(queue, &req, 0);
     return res == pdPASS;
 }
 
 /**********************
  *   STATIC FUNCTIONS
  **********************/
-
 /**
  * Owns the test, only this task calls the framework and accesses the test area.
- * @param argument_p Unused task argument.
+ * @param argument_p  Unused task argument.
  */
-static void stress_task(void * argument_p)
+static void task_main(void * argument_p)
 {
     TickType_t period = pdMS_TO_TICKS(STRESS_TASK_MS);
     uint8_t req = 0U;
@@ -99,8 +100,8 @@ static void stress_task(void * argument_p)
     if (period == 0U) period = 1U;
 
     for (;;) {
-        while (xQueueReceive(stress_queue, &req, 0) == pdPASS)
-            stress_handle(req);
+        while (xQueueReceive(queue, &req, 0) == pdPASS)
+            handle_req(req);
 
         stress_process();
         vTaskDelay(period);
@@ -109,9 +110,9 @@ static void stress_task(void * argument_p)
 
 /**
  * Handles one request in the context of the test task.
- * @param req Mode to start, or STRESS_REQ_STOP.
+ * @param req  Mode to start, or STRESS_REQ_STOP.
  */
-static void stress_handle(uint8_t req)
+static void handle_req(uint8_t req)
 {
     if (req == STRESS_REQ_STOP)
         stress_stop();

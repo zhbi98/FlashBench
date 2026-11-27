@@ -6,7 +6,6 @@
 /*********************
  *      INCLUDES
  *********************/
-
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -15,7 +14,6 @@
 /*********************
  *      DEFINES
  *********************/
-
 #define SIM_BASE 0x5F0000U
 #define SIM_SEC_SIZE 4096U
 #define SIM_SEC_CNT 32U
@@ -35,14 +33,15 @@
 /**********************
  *  STATIC PROTOTYPES
  **********************/
-
 static bool sim_read(uint32_t addr, uint8_t * buf, uint32_t len);
 static bool sim_prog(uint32_t addr, const uint8_t * buf, uint32_t len);
 static bool sim_erase(uint32_t addr);
 static bool sim_busy(void);
 static uint32_t sim_tick(void);
 static void sim_reset(uint8_t fill);
-static flash_stress_res_t sim_setup(const flash_stress_ops_t * ops, flash_stress_mode_t mode, uint32_t sec_cnt, uint32_t reads);
+static flash_stress_res_t sim_setup(const flash_stress_ops_t * ops,
+                                    flash_stress_mode_t mode, uint32_t sec_cnt,
+                                    uint32_t reads);
 static void sim_run(void);
 static uint32_t sim_dirty(uint32_t from, uint32_t cnt);
 static void sim_expect(bool cond, const char * fmt, ...);
@@ -55,7 +54,6 @@ static void sim_test_config(void);
 /**********************
  *  STATIC VARIABLES
  **********************/
-
 /*Content of the simulated flash and the erase count of every sector*/
 static uint8_t sim_mem[SIM_SEC_CNT * SIM_SEC_SIZE];
 static uint32_t sim_er_cnt[SIM_SEC_CNT];
@@ -71,12 +69,18 @@ static uint32_t sim_n_erase = 0U;
 static uint32_t sim_n_read_busy = 0U;
 
 /*Injected faults*/
-static uint32_t sim_flip_every = 0U; /*Flips one bit in every Nth read, 0 is off*/
-static bool sim_overrun = false; /*The read writes one byte past the requested length*/
-static bool sim_misalign = false; /*The read corrupts a byte when buf is not 4-byte aligned*/
-static bool sim_short_odd = false; /*The read misses the last byte of odd lengths*/
-static bool sim_dead_link = false; /*The flash does not answer, every read gives 0xFF*/
-static uint32_t sim_wear_limit = 0U; /*Erases after which a bit stays programmed, 0 is never*/
+static uint32_t sim_flip_every = 0U; /*Flips one bit in every Nth read, 0 is
+                                       off*/
+static bool sim_overrun = false; /*The read writes one byte past the requested
+                                   length*/
+static bool sim_misalign = false; /*The read corrupts a byte when buf is not
+                                    4-byte aligned*/
+static bool sim_short_odd = false; /*The read misses the last byte of odd
+                                     lengths*/
+static bool sim_dead_link = false; /*The flash does not answer, every read
+                                     gives 0xFF*/
+static uint32_t sim_wear_limit = 0U; /*Erases after which a bit stays
+                                       programmed, 0 is never*/
 
 /*Results of the last run, kept in variables so the checks stay short*/
 static bool sim_done = false;
@@ -85,7 +89,8 @@ static uint32_t sim_ok = 0U;
 static uint32_t sim_err = 0U;
 static uint32_t sim_cycles = 0U;
 
-/*Buffers of the test, the read buffer has spare bytes so an overrun stays in memory*/
+/**Buffers of the test, the read buffer has spare bytes so an overrun stays in
+ * memory*/
 static uint8_t sim_wbuf[SIM_SEC_SIZE];
 static uint8_t sim_rbuf_mem[SIM_SEC_SIZE + 8U];
 static uint8_t * sim_rbuf = sim_rbuf_mem + 4U;
@@ -93,7 +98,8 @@ static uint8_t * sim_rbuf = sim_rbuf_mem + 4U;
 static flash_stress_t sim_inst;
 static uint32_t sim_fails = 0U;
 
-/*Non blocking driver with a tick, blocking driver, and one without program and erase*/
+/**Non blocking driver with a tick, blocking driver, and one without program and
+ * erase*/
 static const flash_stress_ops_t sim_ops_nb = {
     .read = sim_read,
     .prog = sim_prog,
@@ -113,14 +119,20 @@ static const flash_stress_ops_t sim_ops_ro = {
 };
 
 /**********************
- *   GLOBAL FUNCTIONS
+ *      MACROS
  **********************/
 
+/**********************
+ *   GLOBAL FUNCTIONS
+ **********************/
 /**
- * Runs every test of the framework on a simulated NOR flash with fault injection and
- * prints the result of every check, built on the host from the root of the repository:
- * gcc -std=c99 -Wall -Wextra -Isrc test/sim_norflash.c src/flash_stress.c -o sim_norflash
- * @return 0 if every check passed; otherwise 1.
+ * Runs every test of the framework on a simulated NOR flash with fault
+ * injection and
+ * prints the result of every check, built on the host from the root of the
+ * repository:
+ * gcc -std=c99 -Wall -Wextra -Isrc test/sim_norflash.c src/flash_stress.c -o
+ * sim_norflash
+ * @return  0 if every check passed; otherwise 1.
  */
 int main(void)
 {
@@ -142,13 +154,12 @@ int main(void)
 /**********************
  *   STATIC FUNCTIONS
  **********************/
-
 /**
  * Reads the simulated flash and applies the injected read faults.
- * @param addr Flash address to read from.
- * @param buf Pointer to the buffer that receives the data.
- * @param len Number of bytes to read.
- * @return Always true.
+ * @param addr  Flash address to read from.
+ * @param buf   Pointer to the buffer that receives the data.
+ * @param len   Number of bytes to read.
+ * @return      Always true.
  */
 static bool sim_read(uint32_t addr, uint8_t * buf, uint32_t len)
 {
@@ -174,10 +185,10 @@ static bool sim_read(uint32_t addr, uint8_t * buf, uint32_t len)
 
 /**
  * Programs the simulated flash, bits can only go from 1 to 0.
- * @param addr Flash address to program.
- * @param buf Pointer to the data to program.
- * @param len Number of bytes to program.
- * @return Always true.
+ * @param addr  Flash address to program.
+ * @param buf   Pointer to the data to program.
+ * @param len   Number of bytes to program.
+ * @return      Always true.
  */
 static bool sim_prog(uint32_t addr, const uint8_t * buf, uint32_t len)
 {
@@ -192,9 +203,10 @@ static bool sim_prog(uint32_t addr, const uint8_t * buf, uint32_t len)
 }
 
 /**
- * Erases one sector of the simulated flash, a worn out sector keeps one bit programmed.
- * @param addr Flash address of the sector to erase.
- * @return Always true.
+ * Erases one sector of the simulated flash, a worn out sector keeps one bit
+ * programmed.
+ * @param addr  Flash address of the sector to erase.
+ * @return      Always true.
  */
 static bool sim_erase(uint32_t addr)
 {
@@ -215,7 +227,7 @@ static bool sim_erase(uint32_t addr)
 
 /**
  * Tells whether the simulated flash is busy, every call advances the tick.
- * @return true while an erase or a program is in progress; otherwise false.
+ * @return  true while an erase or a program is in progress; otherwise false.
  */
 static bool sim_busy(void)
 {
@@ -228,7 +240,7 @@ static bool sim_busy(void)
 
 /**
  * Returns the tick of the simulated flash.
- * @return Number of busy polls so far.
+ * @return  Number of busy polls so far.
  */
 static uint32_t sim_tick(void)
 {
@@ -237,7 +249,7 @@ static uint32_t sim_tick(void)
 
 /**
  * Fills the simulated flash and clears the counters and the injected faults.
- * @param fill Value of every byte of the flash.
+ * @param fill  Value of every byte of the flash.
  */
 static void sim_reset(uint8_t fill)
 {
@@ -259,14 +271,15 @@ static void sim_reset(uint8_t fill)
 
 /**
  * Initializes the test instance on the simulated flash.
- * @param ops Pointer to the driver to register.
- * @param mode Kind of test.
- * @param sec_cnt Sectors in the test area.
- * @param reads Read back passes, or random reads per sector in READ.
- * @return Result of flash_stress_init().
+ * @param ops      Pointer to the driver to register.
+ * @param mode     Kind of test.
+ * @param sec_cnt  Sectors in the test area.
+ * @param reads    Read back passes, or random reads per sector in READ.
+ * @return         Result of flash_stress_init().
  */
-static flash_stress_res_t sim_setup(const flash_stress_ops_t * ops, flash_stress_mode_t mode,
-    uint32_t sec_cnt, uint32_t reads)
+static flash_stress_res_t sim_setup(const flash_stress_ops_t * ops,
+                                    flash_stress_mode_t mode, uint32_t sec_cnt,
+                                    uint32_t reads)
 {
     flash_stress_cfg_t cfg = {0};
 
@@ -302,9 +315,9 @@ static void sim_run(void)
 
 /**
  * Counts the sectors of the simulated flash that are not blank.
- * @param from Index of the first sector.
- * @param cnt Number of sectors.
- * @return Number of sectors holding at least one byte other than 0xFF.
+ * @param from  Index of the first sector.
+ * @param cnt   Number of sectors.
+ * @return      Number of sectors holding at least one byte other than 0xFF.
  */
 static uint32_t sim_dirty(uint32_t from, uint32_t cnt)
 {
@@ -324,8 +337,8 @@ static uint32_t sim_dirty(uint32_t from, uint32_t cnt)
 
 /**
  * Prints the result of one check and counts the failures.
- * @param cond true if the check passed.
- * @param fmt Format of the description, followed by its arguments.
+ * @param cond  true if the check passed.
+ * @param fmt   Format of the description, followed by its arguments.
  */
 static void sim_expect(bool cond, const char * fmt, ...)
 {
@@ -356,8 +369,9 @@ static void sim_test_rotate(void)
     flash_stress_start(&sim_inst, 40U);
     sim_run();
     sim_expect(sim_done && (sim_ok == 40U), "40 loops pass, state DONE");
-    sim_expect(sim_n_read_busy == 0U, "no read while the flash is busy (got %u)",
-        (unsigned)sim_n_read_busy);
+    sim_expect(sim_n_read_busy == 0U,
+               "no read while the flash is busy (got %u)",
+               (unsigned)sim_n_read_busy);
     sim_expect(sim_dirty(0U, 16U) == 0U, "area blank after the test");
 
     /*Power cut after 16 loops, then a short run*/
@@ -370,7 +384,8 @@ static void sim_test_rotate(void)
     sim_setup(&sim_ops_nb, FLASH_STRESS_MODE_ROTATE, 16U, 4U);
     flash_stress_start(&sim_inst, 2U);
     sim_run();
-    sim_expect(sim_dirty(0U, 16U) == 0U, "leftovers of an interrupted run are cleaned");
+    sim_expect(sim_dirty(0U, 16U) == 0U,
+               "leftovers of an interrupted run are cleaned");
 
     /*Power cut during an erase*/
     sim_reset(0xFFU);
@@ -384,11 +399,12 @@ static void sim_test_rotate(void)
     flash_stress_start(&sim_inst, 2U);
     sim_run();
     sim_expect(sim_aborted && (err->res == FLASH_STRESS_ERR_NOT_BLANK),
-        "half erased sector aborts without force");
+               "half erased sector aborts without force");
     sim_inst.cfg.force = true;
     flash_stress_start(&sim_inst, 2U);
     sim_run();
-    sim_expect(sim_done && (sim_dirty(0U, 16U) == 0U), "force runs and leaves the area blank");
+    sim_expect(sim_done && (sim_dirty(0U, 16U) == 0U),
+               "force runs and leaves the area blank");
 
     sim_reset(0xFFU);
     sim_setup(&sim_ops_nb, FLASH_STRESS_MODE_ROTATE, 16U, 4U);
@@ -396,13 +412,15 @@ static void sim_test_rotate(void)
     flash_stress_start(&sim_inst, 20U);
     sim_run();
     sim_expect((sim_err > 0U) && (err->bad_bits == 1U),
-        "injected bit flips detected (%u failed loops)", (unsigned)sim_err);
+               "injected bit flips detected (%u failed loops)",
+               (unsigned)sim_err);
 
     sim_reset(0x00U);
     sim_setup(&sim_ops_nb, FLASH_STRESS_MODE_ROTATE, 16U, 4U);
     flash_stress_start(&sim_inst, 1U);
     sim_run();
-    sim_expect(sim_aborted && (sim_n_erase == 0U), "foreign data: abort, nothing erased");
+    sim_expect(sim_aborted && (sim_n_erase == 0U),
+               "foreign data: abort, nothing erased");
 }
 
 /**
@@ -422,15 +440,17 @@ static void sim_test_read(void)
     flash_stress_start(&sim_inst, 10U);
     sim_run();
     once = (sim_er_cnt[0] == 1U) && (sim_er_cnt[15] == 1U);
-    sim_expect(sim_done && (sim_ok == 10U), "clean driver: 10 passes ok, %u reads",
-        (unsigned)sim_n_read);
-    sim_expect((sim_n_erase == 16U) && once, "each sector erased and written once per run");
+    sim_expect(sim_done && (sim_ok == 10U),
+               "clean driver: 10 passes ok, %u reads", (unsigned)sim_n_read);
+    sim_expect((sim_n_erase == 16U) && once,
+               "each sector erased and written once per run");
     sim_expect(sim_dirty(0U, 16U) == 16U, "known data kept after the test");
 
     sim_setup(&sim_ops_nb, FLASH_STRESS_MODE_READ, 16U, 64U);
     flash_stress_start(&sim_inst, 2U);
     sim_run();
-    sim_expect((sim_ok == 2U) && (sim_er_cnt[0] == 2U), "next run writes the data once again");
+    sim_expect((sim_ok == 2U) && (sim_er_cnt[0] == 2U),
+               "next run writes the data once again");
 
     sim_dead_link = true;
     sim_setup(&sim_ops_nb, FLASH_STRESS_MODE_READ, 16U, 64U);
@@ -438,15 +458,17 @@ static void sim_test_read(void)
     sim_run();
     sim_dead_link = false;
     sim_expect((sim_err == 3U) && (err->res == FLASH_STRESS_ERR_DATA_VERIFY),
-        "dead link reading 0xFF fails every pass");
+               "dead link reading 0xFF fails every pass");
 
     sim_flip_every = 1500U;
     sim_setup(&sim_ops_nb, FLASH_STRESS_MODE_READ, 16U, 64U);
     flash_stress_start(&sim_inst, 10U);
     sim_run();
     sim_flip_every = 0U;
-    one_bit = (err->res == FLASH_STRESS_ERR_DATA_VERIFY) && (err->bad_bits == 1U);
-    sim_expect((sim_err > 0U) && one_bit, "occasional bit flip on the link detected");
+    one_bit = err->res == FLASH_STRESS_ERR_DATA_VERIFY;
+    if (err->bad_bits != 1U) one_bit = false;
+    sim_expect((sim_err > 0U) && one_bit,
+               "occasional bit flip on the link detected");
 
     sim_overrun = true;
     sim_setup(&sim_ops_nb, FLASH_STRESS_MODE_READ, 16U, 64U);
@@ -454,7 +476,7 @@ static void sim_test_read(void)
     sim_run();
     sim_overrun = false;
     sim_expect((sim_err > 0U) && (err->res == FLASH_STRESS_ERR_READ_OVERRUN),
-        "buffer overrun detected");
+               "buffer overrun detected");
 
     sim_misalign = true;
     sim_setup(&sim_ops_nb, FLASH_STRESS_MODE_READ, 16U, 64U);
@@ -474,9 +496,11 @@ static void sim_test_read(void)
     sim_setup(&sim_ops_nb, FLASH_STRESS_MODE_READ, 16U, 64U);
     flash_stress_start(&sim_inst, 1U);
     sim_run();
-    sim_expect(sim_aborted && (sim_n_erase == 0U), "foreign data: abort, nothing erased");
+    sim_expect(sim_aborted && (sim_n_erase == 0U),
+               "foreign data: abort, nothing erased");
 
-    /*Past the writes of the first loop, a stop ends the test within one sector*/
+    /**Past the writes of the first loop, a stop ends the test within one
+     * sector*/
     sim_reset(0xFFU);
     sim_setup(&sim_ops_nb, FLASH_STRESS_MODE_READ, 16U, 64U);
     flash_stress_start(&sim_inst, 0U);
@@ -487,7 +511,8 @@ static void sim_test_read(void)
     flash_stress_stop(&sim_inst);
     while (flash_stress_poll(&sim_inst))
         polls++;
-    sim_expect(polls <= 65U, "stop ends READ within one sector (%u polls)", (unsigned)polls);
+    sim_expect(polls <= 65U, "stop ends READ within one sector (%u polls)",
+               (unsigned)polls);
 }
 
 /**
@@ -499,6 +524,7 @@ static void sim_test_endurance(void)
     const flash_stress_stat_t * stat = flash_stress_stat(&sim_inst);
     const flash_stress_time_t * er = &stat->er_time;
     bool equal = false;
+    bool stuck = false;
 
     printf("ENDURANCE\n");
 
@@ -511,26 +537,31 @@ static void sim_test_endurance(void)
     sim_run();
     equal = sim_er_cnt[0] == sim_er_cnt[1];
     sim_expect((stat->first_fail == 301U) && (sim_err == 3U),
-        "wear out at erase 301 found, first_fail=%u", (unsigned)stat->first_fail);
-    sim_expect((err->res == FLASH_STRESS_ERR_ERASE_VERIFY) && (err->bad_bits == 1U),
-        "stuck bit reported as erase error");
+               "wear out at erase 301 found, first_fail=%u",
+               (unsigned)stat->first_fail);
+    stuck = err->res == FLASH_STRESS_ERR_ERASE_VERIFY;
+    if (err->bad_bits != 1U) stuck = false;
+    sim_expect(stuck, "stuck bit reported as erase error");
     sim_expect(equal && (sim_er_cnt[0] == sim_cycles),
-        "every sector cycled once per loop (%u cycles)", (unsigned)sim_cycles);
+               "every sector cycled once per loop (%u cycles)",
+               (unsigned)sim_cycles);
     sim_expect((er->cnt == 2U * sim_cycles) && (er->max >= SIM_ERASE_BUSY),
-        "erase timing recorded: max %u ticks", (unsigned)er->max);
+               "erase timing recorded: max %u ticks", (unsigned)er->max);
 
     sim_reset(0xFFU);
     sim_setup(&sim_ops_nb, FLASH_STRESS_MODE_ENDURANCE, 2U, 1U);
     flash_stress_start(&sim_inst, 50U);
     sim_run();
     sim_expect(sim_dirty(0U, 2U) == 2U, "area keeps its data after the test");
-    sim_expect(sim_mem[SIM_SEC_SIZE + SIM_WEAR_BYTE] == 0x00U, "even cycle programs every bit");
+    sim_expect(sim_mem[SIM_SEC_SIZE + SIM_WEAR_BYTE] == 0x00U,
+               "even cycle programs every bit");
 
     sim_setup(&sim_ops_nb, FLASH_STRESS_MODE_ENDURANCE, 2U, 1U);
     flash_stress_start(&sim_inst, 10U);
     sim_run();
     sim_expect((stat->cycle_base == 50U) && (sim_cycles == 60U),
-        "restart resumes: base %u, now %u", (unsigned)stat->cycle_base, (unsigned)sim_cycles);
+               "restart resumes: base %u, now %u", (unsigned)stat->cycle_base,
+               (unsigned)sim_cycles);
 
     /*Power cut while sector 1 is erased*/
     memset(&sim_mem[SIM_SEC_SIZE], 0xFF, 300U);
@@ -542,7 +573,8 @@ static void sim_test_endurance(void)
     flash_stress_start(&sim_inst, 10U);
     sim_run();
     sim_expect(sim_done && (stat->cycle_base == 60U),
-        "force resumes from the intact sector: base %u", (unsigned)stat->cycle_base);
+               "force resumes from the intact sector: base %u",
+               (unsigned)stat->cycle_base);
 
     sim_reset(0xFFU);
     sim_setup(&sim_ops_blk, FLASH_STRESS_MODE_ENDURANCE, 1U, 2U);
@@ -552,7 +584,8 @@ static void sim_test_endurance(void)
 }
 
 /**
- * Tests flash_stress_waiting(), which tells the caller when a poll would do nothing.
+ * Tests flash_stress_waiting(), which tells the caller when a poll would do
+ * nothing.
  */
 static void sim_test_waiting(void)
 {
@@ -583,7 +616,8 @@ static void sim_test_waiting(void)
         polls++;
     }
     sim_run();
-    sim_expect(sim_done && (sim_ok == 2U) && (sim_err == 0U), "test passes when waits are skipped");
+    sim_expect(sim_done && (sim_ok == 2U) && (sim_err == 0U),
+               "test passes when waits are skipped");
     sim_expect((waits > 0U) && (polls > 0U), "waits were skipped");
     sim_expect(!flash_stress_waiting(&sim_inst), "finished");
 

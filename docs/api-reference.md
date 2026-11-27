@@ -66,9 +66,9 @@ READ 模式下，`reads` 是每个扇区每轮的随机读次数，`prog_size` �
 | --- | --- | --- |
 | `flash_stress_init(p, ops, cfg)` | 初始化实例 | 只登记，不访问 Flash |
 | `flash_stress_start(p, loops)` | 启动一次全新的测试 | `loops` 为 0 表示不限轮数 |
+| `flash_stress_stop(p)` | 请求停止 | 当前一轮结束后生效 |
 | `flash_stress_poll(p)` | 推进一小步 | 测试结束后返回 `false` |
 | `flash_stress_waiting(p)` | 是否在等待擦写完成 | 会调用 `busy` |
-| `flash_stress_stop(p)` | 请求停止 | 当前一轮结束后生效 |
 
 这些接口必须在同一个执行上下文中调用，不能放进中断。
 
@@ -85,9 +85,9 @@ READ 模式下，`reads` 是每个扇区每轮的随机读次数，`prog_size` �
 | `flash_stress_loop(p)` | 已完成的轮数 |
 | `flash_stress_ok_cnt(p)` | 通过的轮数 |
 | `flash_stress_err_cnt(p)` | 失败的轮数 |
-| `flash_stress_cycles(p)` | ENDURANCE 每个扇区累计的擦写次数 |
 | `flash_stress_last_err(p)` | 最近一次错误的详情 |
 | `flash_stress_stat(p)` | 流量、次数和耗时统计 |
+| `flash_stress_cycles(p)` | ENDURANCE 每个扇区累计的擦写次数 |
 
 读数接口只读取实例中的数据，不访问 Flash，可以在显示任务中调用。32 位 CPU 上 64 位字节数可能读到更新一半的值，只影响一次显示。
 

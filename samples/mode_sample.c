@@ -6,7 +6,6 @@
 /*********************
  *      INCLUDES
  *********************/
-
 #include "flash_stress.h"
 
 /*Include the declarations of the stress_* functions of the application here*/
@@ -22,70 +21,76 @@
 /**********************
  *  STATIC PROTOTYPES
  **********************/
-
-static bool stress_launch(flash_stress_mode_t mode);
+static bool launch(flash_stress_mode_t mode);
 
 /**********************
  *  STATIC VARIABLES
  **********************/
-
 /*Mode of the test that runs, or that ran last*/
-static flash_stress_mode_t stress_cur = FLASH_STRESS_MODE_ROTATE;
+static flash_stress_mode_t cur_mode = FLASH_STRESS_MODE_ROTATE;
 
-/*Mode started once the running test has ended, a switch waits for its clean end*/
-static flash_stress_mode_t stress_next = FLASH_STRESS_MODE_ROTATE;
-static bool stress_pending = false;
+/**Mode started once the running test has ended, a switch waits for its clean
+ * end*/
+static flash_stress_mode_t next_mode = FLASH_STRESS_MODE_ROTATE;
+static bool pending = false;
+
+/**********************
+ *      MACROS
+ **********************/
 
 /**********************
  *   GLOBAL FUNCTIONS
  **********************/
-
 /**
  * Starts a test in a mode, or switches to that mode while a test runs.
- * The running test is stopped first, ROTATE and ENDURANCE end their loop, READ its
+ * The running test is stopped first, ROTATE and ENDURANCE end their loop, READ
+ * its
  * sector, then stress_on_end() starts the new mode.
- * @param mode Kind of test to run.
- * @return true if the test was started or the switch is pending; otherwise false.
+ * @param mode  Kind of test to run.
+ * @return      true if the test was started or the switch is pending; otherwise
+ *              false.
  */
 bool stress_start(flash_stress_mode_t mode)
 {
-    if (!stress_running()) return stress_launch(mode);
+    if (!stress_running()) return launch(mode);
 
-    stress_next = mode;
-    stress_pending = true;
+    next_mode = mode;
+    pending = true;
     flash_stress_stop(stress_object());
 
     return true;
 }
 
 /**
- * Stops the running test, ROTATE also erases its area back to blank before it ends.
+ * Stops the running test, ROTATE also erases its area back to blank before it
+ * ends.
  */
 void stress_stop(void)
 {
-    stress_pending = false;
+    pending = false;
     flash_stress_stop(stress_object());
 }
 
 /**
  * Example of a menu or key handler of the application.
- * @param item Selected item, 0..2 start a mode, any other value stops the test.
+ * @param item  Selected item, 0..2 start a mode, any other value stops the
+ *              test.
  */
 void stress_select(uint32_t item)
 {
     switch (item) {
-    case 0U:
-        stress_start(FLASH_STRESS_MODE_ROTATE);
-        break;
-    case 1U:
-        stress_start(FLASH_STRESS_MODE_READ);
-        break;
-    case 2U:
-        stress_start(FLASH_STRESS_MODE_ENDURANCE);
-        break;
-    default:
-        stress_stop();
-        break;
+        case 0U:
+            stress_start(FLASH_STRESS_MODE_ROTATE);
+            break;
+        case 1U:
+            stress_start(FLASH_STRESS_MODE_READ);
+            break;
+        case 2U:
+            stress_start(FLASH_STRESS_MODE_ENDURANCE);
+            break;
+        default:
+            stress_stop();
+            break;
     }
 }
 
@@ -96,34 +101,33 @@ void stress_select(uint32_t item)
 void stress_on_end(void)
 {
     stress_report();
-    if (!stress_pending) return;
+    if (!pending) return;
 
-    stress_pending = false;
-    stress_launch(stress_next);
+    pending = false;
+    launch(next_mode);
 }
 
 /**
  * Returns the mode of the test that runs, or that ran last.
- * @return Kind of test.
+ * @return  Kind of test.
  */
 flash_stress_mode_t stress_mode(void)
 {
-    return stress_cur;
+    return cur_mode;
 }
 
 /**********************
  *   STATIC FUNCTIONS
  **********************/
-
 /**
  * Starts a test when no test runs and remembers its mode.
- * @param mode Kind of test to run.
- * @return true if the test was started; otherwise false.
+ * @param mode  Kind of test to run.
+ * @return      true if the test was started; otherwise false.
  */
-static bool stress_launch(flash_stress_mode_t mode)
+static bool launch(flash_stress_mode_t mode)
 {
     if (!stress_begin(mode)) return false;
 
-    stress_cur = mode;
+    cur_mode = mode;
     return true;
 }
